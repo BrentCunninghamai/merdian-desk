@@ -30,6 +30,15 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def new_proof_path(requested):
+    proof = Path(requested).resolve()
+    if not proof.is_relative_to(ARTIFACTS) or proof == ARTIFACTS:
+        raise ValueError('Package evidence must remain inside the artifacts directory')
+    if proof.exists() or not proof.parent.is_dir():
+        raise ValueError('Use a fresh package evidence path with an existing parent directory')
+    return proof
+
+
 def git(*args):
     return subprocess.check_output(['git', '-C', str(REPO), *args], text=True).strip()
 
@@ -202,8 +211,10 @@ def main():
     parser.add_argument('--phase', choices=['validate', 'package'], default='validate')
     parser.add_argument('--bundle', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--evidence-output', default=str(ARTIFACTS / 'fork-package-result.json'))
     parser.add_argument('--quality', type=int, choices=range(12), default=9)
     options = parser.parse_args()
+    proof = new_proof_path(options.evidence_output)
     bundle, output = Path(options.bundle).resolve(), Path(options.output).resolve()
     result = validate(bundle, output)
     result['checked_utc'] = datetime.now(timezone.utc).isoformat()
@@ -239,8 +250,8 @@ def main():
         result['state'] = 'PackagedForReview'
         result['package_invocation_argv'] = command
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    proof = ARTIFACTS / 'fork-package-result.json'
-    proof.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+    with proof.open('x', encoding='utf-8') as record:
+        record.write(json.dumps(result, indent=2) + '\n')
     print(json.dumps({'state': result['state'], 'proof_path': str(proof), 'source_commit': result['source_commit'],
                       'output_path': result['output_path'], 'output_sha256': result.get('output_sha256'),
                       'installed': False, 'executed': False, 'published': False}))

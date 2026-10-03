@@ -51,6 +51,8 @@ pub(crate) use ipc_auth::authorize_windows_portable_service_ipc_connection;
 #[cfg(windows)]
 pub(crate) use ipc_auth::ensure_peer_executable_matches_current_by_pid_opt;
 #[cfg(windows)]
+pub(crate) use ipc_auth::verify_attended_cm_client;
+#[cfg(windows)]
 pub(crate) use ipc_auth::log_rejected_windows_ipc_connection;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use ipc_auth::{active_uid, authorize_service_scoped_ipc_connection};
@@ -1460,7 +1462,12 @@ pub async fn connect(ms_timeout: u64, postfix: &str) -> ResultType<ConnectionTmp
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let path = Config::ipc_path(postfix);
-        connect_with_path(ms_timeout, &path).await
+        let stream = connect_with_path(ms_timeout, &path).await?;
+        #[cfg(windows)]
+        if crate::merdian_policy::active() && postfix == "_cm" {
+            ipc_auth::verify_attended_cm_server(&stream)?;
+        }
+        Ok(stream)
     }
 }
 

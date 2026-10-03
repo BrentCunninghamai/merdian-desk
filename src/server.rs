@@ -515,6 +515,8 @@ impl Server {
     }
 
     pub fn subscribe(&mut self, name: &str, conn: ConnInner, sub: bool) {
+        // All services, including cursor/clipboard, need the same host admission.
+        let sub = sub && conn.session_data_allowed();
         if let Some(s) = self.services.get(name) {
             if s.is_subed(conn.id()) == sub {
                 return;

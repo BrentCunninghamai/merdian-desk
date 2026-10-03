@@ -859,9 +859,17 @@ pub async fn start_ipc<T: InvokeUiCM>(cm: ConnectionManager<T>) {
             while let Some(result) = incoming.next().await {
                 match result {
                     Ok(stream) => {
+                        let stream = Connection::new(stream);
+                        #[cfg(windows)]
+                        if crate::merdian_policy::active() {
+                            if let Err(error) = ipc::verify_attended_cm_client(&stream) {
+                                log::warn!("Rejected unrelated CM peer: {}", error);
+                                continue;
+                            }
+                        }
                         log::debug!("Got new connection");
                         tokio::spawn(IpcTaskRunner::<T>::ipc_task(
-                            Connection::new(stream),
+                            stream,
                             cm.clone(),
                         ));
                     }

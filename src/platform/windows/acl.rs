@@ -22,7 +22,7 @@ use windows::{
             TOKEN_QUERY, TOKEN_USER,
         },
         Storage::FileSystem::{FILE_ALL_ACCESS, FILE_GENERIC_WRITE},
-        System::Threading::{GetCurrentProcess, OpenProcessToken},
+        System::Threading::{GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION},
     },
 };
 
@@ -194,10 +194,22 @@ pub fn set_path_permission(dir: &Path, access_mask: u32) -> ResultType<()> {
 /// - Official SID-to-string API (`ConvertSidToStringSidW`):
 ///   https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertsidtostringsidw
 pub(crate) fn current_process_user_sid_string() -> ResultType<String> {
+    process_handle_user_sid_string(unsafe { GetCurrentProcess() })
+}
+
+pub(crate) fn process_user_sid_string(pid: u32) -> ResultType<String> {
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }
+        .map_err(|e| anyhow!("Cannot query CM peer process: {}", e))?;
+    let result = process_handle_user_sid_string(process);
+    unsafe { let _ = CloseHandle(process); }
+    result
+}
+
+fn process_handle_user_sid_string(process: HANDLE) -> ResultType<String> {
     let mut token = HANDLE::default();
     let result = (|| -> ResultType<String> {
         unsafe {
-            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)
+            OpenProcessToken(process, TOKEN_QUERY, &mut token)
                 .map_err(|e| anyhow!("Failed to open current process token: {}", e))?;
         }
 

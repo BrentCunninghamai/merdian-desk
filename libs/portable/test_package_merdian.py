@@ -2,6 +2,7 @@ import importlib.util
 import io
 from pathlib import Path
 import struct
+import tempfile
 import unittest
 from unittest import mock
 
@@ -11,6 +12,20 @@ spec.loader.exec_module(packager)
 
 
 class PackageEvidenceTests(unittest.TestCase):
+    def test_new_proof_path_preserves_history_and_rejects_outside_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory) / 'artifacts'
+            artifacts.mkdir()
+            history = artifacts / 'first-build.json'
+            history.write_text('original evidence', encoding='utf-8')
+            with mock.patch.object(packager, 'ARTIFACTS', artifacts.resolve()):
+                self.assertEqual(packager.new_proof_path(artifacts / 'second-build.json'), (artifacts / 'second-build.json').resolve())
+                with self.assertRaisesRegex(ValueError, 'fresh'):
+                    packager.new_proof_path(history)
+                with self.assertRaisesRegex(ValueError, 'inside'):
+                    packager.new_proof_path(Path(directory) / 'outside.json')
+            self.assertEqual(history.read_text(encoding='utf-8'), 'original evidence')
+
     def test_windows_inventory_normalizes_values_and_catches_changed_bytes(self):
         expected = [{'path': 'data\\assets\\file.txt', 'size': 3, 'sha256': 'A' * 64}]
         actual = [{'path': 'data/assets/file.txt', 'size': 3, 'sha256': 'a' * 64}]

@@ -242,6 +242,8 @@ pub struct ConnInner {
     id: i32,
     tx: Option<Sender>,
     tx_video: Option<Sender>,
+    // Host clones share admission state; viewer audio subscribers have no host gate.
+    host_session_access: Option<Arc<AtomicBool>>,
 }
 
 struct InputMouse {
@@ -467,7 +469,27 @@ pub struct Connection {
 
 impl ConnInner {
     pub fn new(id: i32, tx: Option<Sender>, tx_video: Option<Sender>) -> Self {
-        Self { id, tx, tx_video }
+        Self {
+            id,
+            tx,
+            tx_video,
+            host_session_access: None,
+        }
+    }
+
+    pub fn session_data_allowed(&self) -> bool {
+        !crate::merdian_policy::active()
+            || self
+                .host_session_access
+                .as_ref()
+                .map(|access| access.load(Ordering::SeqCst))
+                .unwrap_or(true)
+    }
+
+    fn set_host_session_access(&self, allowed: bool) {
+        if let Some(access) = &self.host_session_access {
+            access.store(allowed, Ordering::SeqCst);
+        }
     }
 }
 
@@ -479,6 +501,9 @@ impl Subscriber for ConnInner {
 
     #[inline]
     fn send(&mut self, msg: Arc<Message>) {
+        if !self.session_data_allowed() {
+            return;
+        }
         // Send SwitchDisplay on the same channel as VideoFrame to avoid send order problems.
         let tx_by_video = match &msg.union {
             Some(message::Union::VideoFrame(_)) => true,
@@ -567,6 +592,7 @@ impl Connection {
                 id,
                 tx: Some(tx),
                 tx_video: Some(tx_video),
+                host_session_access: Some(Arc::new(AtomicBool::new(false))),
             },
             require_2fa: crate::auth_2fa::get_2fa(None),
             awaiting_2fa: false,
@@ -749,6 +775,13 @@ impl Connection {
                     break;
                 }
                 Some(data) = rx_from_cm.recv() => {
+                    if crate::merdian_policy::active() && !conn.session_access_allowed()
+                        && !matches!(&data, ipc::Data::Authorize | ipc::Data::Close
+                            | ipc::Data::CmErr(_) | ipc::Data::SwitchPermission { .. }
+                            | ipc::Data::ChatMessage { .. })
+                    {
+                        continue;
+                    }
                     match data {
                         ipc::Data::Authorize => {
                             if !conn.local_consent.accept_local() { break; }
@@ -800,6 +833,20 @@ impl Connection {
                             conn.chat_unanswered = false;
                         }
                         ipc::Data::SwitchPermission{name, enabled} => {
+                            let option = match name.as_str() {
+                                "restart" => "enable-remote-restart",
+                                "block_input" => "enable-block-input",
+                                "privacy_mode" => "enable-privacy-mode",
+                                "remote_printer" => "enable-remote-printer",
+                                "terminal" => "enable-terminal",
+                                "tunnel" => "enable-tunnel",
+                                _ => "",
+                            };
+                            if enabled && !crate::merdian_policy_model::effective_host_permission(
+                                crate::merdian_policy::active(), option, true, None)
+                            {
+                                continue;
+                            }
                             log::info!("Change permission {} -> {}", name, enabled);
                             if &name == "keyboard" {
                                 conn.keyboard = enabled;
@@ -816,7 +863,8 @@ impl Connection {
                                     );
                                     s.write().unwrap().subscribe(
                                         NAME_CURSOR,
-                                        conn.inner.clone(), enabled || conn.show_remote_cursor);
+                                        conn.inner.clone(), conn.session_access_allowed()
+                                            && (enabled || conn.show_remote_cursor));
                                 }
                             } else if &name == "clipboard" {
                                 conn.clipboard = enabled;
@@ -829,7 +877,7 @@ impl Connection {
                             } else if &name == "audio" {
                                 conn.audio = enabled;
                                 conn.send_permission(Permission::Audio, enabled).await;
-                                if conn.authorized {
+                                if conn.authorized && conn.session_access_allowed() {
                                     if let Some(s) = conn.server.upgrade() {
                                         if conn.is_authed_view_camera_conn() {
                                             if conn.voice_calling || !conn.audio_enabled() {
@@ -919,7 +967,7 @@ impl Connection {
                                 continue;
                             }
                             // The CM can send MonitorReady before this connection is authorized.
-                            if !conn.authorized {
+                            if !conn.authorized || !conn.session_access_allowed() {
                                 log::debug!("Discarding file clipboard message before authorization");
                                 continue;
                             }
@@ -1051,7 +1099,7 @@ impl Connection {
                     }
                 },
                 _ = conn.file_timer.tick() => {
-                    if !conn.read_jobs.is_empty() {
+                    if !conn.read_jobs.is_empty() && conn.session_access_allowed() {
                         conn.send_to_cm(ipc::Data::FileTransferLog(("transfer".to_string(), fs::serialize_transfer_jobs(&conn.read_jobs))));
                         match fs::handle_read_jobs(&mut conn.read_jobs, &mut conn.stream).await {
                             Ok(log) => {
@@ -1076,6 +1124,9 @@ impl Connection {
                     }
                 }
                 Some((instant, value)) = rx_video.recv() => {
+                    if !conn.session_access_allowed() {
+                        continue;
+                    }
                     if !conn.video_ack_required {
                         if let Some(message::Union::VideoFrame(vf)) = &value.union {
                             video_service::notify_video_frame_fetched(vf.display as usize, id, Some(instant.into()));
@@ -1087,6 +1138,14 @@ impl Connection {
                     }
                 },
                 Some((instant, value)) = rx.recv() => {
+                    // A service subscription is not consent. Keep the stop control
+                    // message, but discard all queued host payload while pending/closed.
+                    if !conn.session_access_allowed()
+                        && !matches!(&value.union, Some(message::Union::Misc(m))
+                            if matches!(&m.union, Some(misc::Union::StopService(_))))
+                    {
+                        continue;
+                    }
                     let latency = instant.elapsed().as_millis() as i64;
                     #[allow(unused_mut)]
                     let mut msg = value;
@@ -1148,6 +1207,9 @@ impl Connection {
                     }
                 },
                 Some(data) = rx_from_authed.recv() => {
+                    if !conn.session_access_allowed() {
+                        continue;
+                    }
                     match data {
                         #[cfg(all(target_os = "windows", feature = "flutter"))]
                         ipc::Data::PrinterData(data) => {
@@ -1898,6 +1960,8 @@ impl Connection {
             return false;
         }
         self.authorized = true;
+        self.inner
+            .set_host_session_access(self.session_access_allowed());
         self.unauthorized_id = None;
         // One-time means gone once it has let a peer in, not once that peer
         // leaves. This session's later logins come in on the password the
@@ -2321,13 +2385,20 @@ impl Connection {
         self.keyboard && !self.disable_keyboard
     }
 
+    #[inline]
+    fn session_access_allowed(&self) -> bool {
+        self.local_consent
+            .may_access_session(crate::merdian_policy::active(), self.authorized)
+    }
+
     fn clipboard_enabled(&self) -> bool {
         self.clipboard && !self.disable_clipboard
     }
 
     #[inline]
     fn can_sub_clipboard_service(&self) -> bool {
-        self.clipboard_enabled()
+        self.session_access_allowed()
+            && self.clipboard_enabled()
             && self.peer_keyboard_enabled()
             && crate::get_builtin_option(keys::OPTION_ONE_WAY_CLIPBOARD_REDIRECTION) != "Y"
     }
@@ -2343,7 +2414,8 @@ impl Connection {
 
     #[cfg(feature = "unix-file-copy-paste")]
     fn can_sub_file_clipboard_service(&self) -> bool {
-        self.clipboard_enabled()
+        self.session_access_allowed()
+            && self.clipboard_enabled()
             && self.file_transfer_enabled()
             && crate::get_builtin_option(keys::OPTION_ONE_WAY_FILE_TRANSFER) != "Y"
     }
@@ -2641,14 +2713,24 @@ impl Connection {
         {
             let access_mode = Config::get_option("access-mode");
             if access_mode == "full" {
-                return true;
+                return crate::merdian_policy_model::effective_host_permission(
+                    crate::merdian_policy::active(),
+                    enable_prefix_option,
+                    true,
+                    None,
+                );
             } else if access_mode == "view" {
                 return false;
             }
         }
-        config::option2bool(
+        crate::merdian_policy_model::effective_host_permission(
+            crate::merdian_policy::active(),
             enable_prefix_option,
-            &Config::get_option(enable_prefix_option),
+            config::option2bool(
+                enable_prefix_option,
+                &Config::get_option(enable_prefix_option),
+            ),
+            None,
         )
     }
 
@@ -2677,7 +2759,12 @@ impl Connection {
                 if let Some(enabled) =
                     crate::get_control_permission(control_permissions.permissions, permission)
                 {
-                    return enabled;
+                    return crate::merdian_policy_model::effective_host_permission(
+                        crate::merdian_policy::active(),
+                        enable_prefix_option,
+                        false,
+                        Some(enabled),
+                    );
                 }
             }
         }
@@ -3154,7 +3241,7 @@ impl Connection {
                     }
                 }
             }
-        } else if self.authorized {
+        } else if self.authorized && self.session_access_allowed() {
             if self.port_forward_socket.is_some() {
                 return true;
             }
@@ -5246,6 +5333,7 @@ impl Connection {
 
     async fn on_close(&mut self, reason: &str, lock: bool) {
         self.local_consent.close();
+        self.inner.set_host_session_access(false);
         if self.closed {
             return;
         }

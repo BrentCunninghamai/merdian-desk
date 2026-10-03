@@ -26,7 +26,37 @@ use std::{
     path::{Path, PathBuf},
 };
 #[cfg(windows)]
-use windows::Win32::{Foundation::HANDLE, System::Pipes::GetNamedPipeClientProcessId};
+use windows::Win32::{Foundation::HANDLE, System::Pipes::{GetNamedPipeClientProcessId, GetNamedPipeServerProcessId}};
+
+#[cfg(windows)]
+fn ensure_attended_cm_peer(peer_pid: Option<u32>) -> ResultType<()> {
+    let pid = peer_pid.ok_or_else(|| anyhow::anyhow!("Cannot resolve CM peer process"))?;
+    ensure_peer_executable_matches_current_by_pid_opt(Some(pid), "_cm")?;
+    let session = crate::platform::windows::get_current_process_session_id();
+    if session.is_none() || crate::platform::windows::get_session_id_of_process(pid) != session {
+        bail!("CM peer must share the host user's signed-in session");
+    }
+    if crate::platform::windows::process_user_sid_string(pid)?
+        != crate::platform::windows::current_process_user_sid_string()?
+        || crate::platform::windows::is_elevated(Some(pid))?
+    {
+        bail!("CM peer must be the same normal, non-elevated user");
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+pub(crate) fn verify_attended_cm_client(stream: &Connection) -> ResultType<()> {
+    ensure_attended_cm_peer(stream.peer_pid())
+}
+
+#[cfg(windows)]
+pub(crate) fn verify_attended_cm_server(stream: &ConnectionTmpl<parity_tokio_ipc::ConnectionClient>) -> ResultType<()> {
+    let mut pid = 0u32;
+    unsafe { GetNamedPipeServerProcessId(HANDLE(stream.inner.get_ref().as_raw_handle()), &mut pid) }
+        .map_err(|e| anyhow::anyhow!("Cannot resolve CM pipe server: {}", e))?;
+    ensure_attended_cm_peer(if pid == 0 { None } else { Some(pid) })
+}
 
 #[cfg(windows)]
 #[inline]
