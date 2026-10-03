@@ -12,6 +12,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
+import 'package:flutter_hbb/desktop/merdian_lifecycle.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/desktop/widgets/merdian_attended_support.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
@@ -95,8 +96,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       if (!isOutgoingOnly && !isMerdianDesk) buildPasswordBoard(context),
       if (isMerdianDesk)
         MerdianSupportGuide(onExit: () async {
-          await bind.mainOnMainWindowClose();
-          await windowManager.close();
+          await closeMerdianDesk(closeOwnedSessions: bind.mainOnMainWindowClose);
         }),
       if (isMerdianDesk) loadPowered(context),
       FutureBuilder<Widget>(

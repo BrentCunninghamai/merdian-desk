@@ -128,9 +128,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Attended policy tests failed.' }
           Push-Location flutter
           try {
-            flutter test test/merdian_attended_support_test.dart
+            flutter test test/merdian_attended_support_test.dart test/merdian_lifecycle_test.dart
             if ($LASTEXITCODE -ne 0) { throw 'Attended onboarding tests failed.' }
-            dart analyze lib/desktop/widgets/merdian_attended_support.dart test/merdian_attended_support_test.dart
+            dart analyze lib/desktop/widgets/merdian_attended_support.dart lib/desktop/merdian_lifecycle.dart test/merdian_attended_support_test.dart test/merdian_lifecycle_test.dart
             if ($LASTEXITCODE -ne 0) { throw 'Attended onboarding analysis failed.' }
           } finally { Pop-Location }
 
@@ -144,7 +144,7 @@ jobs:
             if (-not (Test-Path "$output/$file") -or (Get-Item "$output/$file").Length -lt 10000) { throw "Build output is missing: $file" }
           }
           $hashes = Get-ChildItem -LiteralPath $output -File -Recurse | ForEach-Object { [ordered]@{path=$_.FullName.Substring((Resolve-Path $output).Path.Length+1); size=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()} }
-          [ordered]@{source_commit=$env:GITHUB_SHA; built_at_utc=[DateTime]::UtcNow.ToString('o'); features=@('flutter','hwcodec','vram'); compiled=$true; packaged=$false; signed=$false; installed=$false; published=$false; attended_session_verified=$false; files=@($hashes)} | ConvertTo-Json -Depth 6 | Set-Content "$output/merdian-build-evidence.json" -Encoding utf8NoBOM
+          [ordered]@{source_commit=$env:GITHUB_SHA; built_at_utc=[DateTime]::UtcNow.ToString('o'); features=@('flutter','hwcodec','vram'); compiled=$true; packaged=$false; executed=$false; signed=$false; installed=$false; published=$false; attended_session_verified=$false; files=@($hashes)} | ConvertTo-Json -Depth 6 | Set-Content "$output/merdian-build-evidence.json" -Encoding utf8NoBOM
 
       - name: Retain unqualified review build bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

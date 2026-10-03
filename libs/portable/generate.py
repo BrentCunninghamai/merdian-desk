@@ -6,6 +6,7 @@ import subprocess
 from hashlib import md5
 import brotli
 import datetime
+import stat
 
 # 4GB maximum
 length_count = 4
@@ -29,24 +30,28 @@ def generate_md5_table(folder: str, level, exclude: str = None) -> dict:
     # os.curdir is the literal ".", so restoring it left us inside `folder`.
     curdir = os.getcwd()
     os.chdir(folder)
-    for root, _, files in os.walk('.'):
-        # remove ./
-        for f in files:
-            md5_generator = md5()
-            full_path = os.path.join(root, f)
-            if skip and normalize(full_path) == skip:
-                print(f"Excluding {full_path}...")
-                excluded = True
-                continue
-            print(f"Processing {full_path}...")
-            f = open(full_path, "rb")
-            content = f.read()
-            content_compressed = brotli.compress(
-                content, quality=level)
-            md5_generator.update(content)
-            md5_code = md5_generator.hexdigest().encode(encoding=encoding)
-            res[full_path] = (content_compressed, md5_code)
-    os.chdir(curdir)
+    try:
+        for root, directories, files in os.walk('.'):
+            directories.sort()
+            for entry in directories + files:
+                path = os.path.join(root, entry)
+                metadata = os.stat(path, follow_symlinks=False)
+                if os.path.islink(path) or getattr(metadata, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                    raise ValueError(f"package cannot follow a reparse point: {path}")
+            for filename in sorted(files):
+                full_path = os.path.join(root, filename)
+                if skip and normalize(full_path) == skip:
+                    print(f"Excluding {full_path}...")
+                    excluded = True
+                    continue
+                print(f"Processing {full_path}...")
+                with open(full_path, "rb") as source:
+                    content = source.read()
+                content_compressed = brotli.compress(content, quality=level)
+                md5_code = md5(content).hexdigest().encode(encoding=encoding)
+                res[full_path] = (content_compressed, md5_code)
+    finally:
+        os.chdir(curdir)
     if skip and not excluded:
         raise ValueError(f"excluded file was not found in {folder}: {exclude}")
     return res
@@ -57,6 +62,10 @@ def write_package_metadata(md5_table: dict, output_folder: str, exe: str):
 
 
 def write_blob(md5_table: dict, output_path: str, exe: str):
+    if normalize(exe) != 'merdian-desk.exe':
+        raise ValueError('This attended package must launch Merdian-Desk.exe.')
+    if normalize(exe) not in {normalize(path) for path in md5_table}:
+        raise ValueError('The branded executable is missing from the package.')
     with open(output_path, "wb") as f:
         f.write("rustdesk".encode(encoding=encoding))
         for path in md5_table.keys():
@@ -88,7 +97,7 @@ def build_portable(output_folder: str, target: str):
     current_dir = os.getcwd()
     try:
         os.chdir(output_folder)
-        cmd = ["cargo", "build", "--locked", "--release"]
+        cmd = ["cargo", "build", "--locked", "--release", "--package", "rustdesk-portable-packer", "--bin", "merdian-desk-portable"]
         if target:
             cmd.extend(["--target", target])
         subprocess.run(cmd, check=True)
@@ -106,11 +115,11 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output", dest="output_folder",
                       help="the root of portable packer project, default is './'")
     parser.add_option("-e", "--executable", dest="executable",
-                      help="specify startup file in --folder, default is rustdesk.exe")
+                      help="specify startup file in --folder, default is Merdian-Desk.exe")
     parser.add_option("-t", "--target", dest="target",
                       help="the target used by cargo")
     parser.add_option("-l", "--level", dest="level", type="int",
-                      help="compression level, default is 11, highest", default=11)
+                      help="compression level, default is 9", default=9)
     parser.add_option("--package", dest="package",
                       help="write the per-customer blob to this path instead of "
                            "data.bin, and skip the cargo build. Injected into the "
@@ -123,15 +132,13 @@ if __name__ == '__main__':
     folder = options.folder or './rustdesk'
     output_folder = os.path.abspath(options.output_folder or './')
 
+    if options.package or options.exclude_exe:
+        parser.error('External package/template overrides are disabled for this attended build.')
+    if not 0 <= options.level <= 11:
+        parser.error('Compression level must be between 0 and 11.')
     if not options.executable:
-        options.executable = 'rustdesk.exe'
-    if not options.executable.startswith(folder):
-        options.executable = folder + '/' + options.executable
-    # Note: the simple check `options.executable.startswith(folder)` is incorrect.
-    # `python generate.py -f rustdesk -e rustdesk.exe` or `python generate.py -f rustdesk`
-    # will result the print "Executable path: ..exe".
-    # So we need to check if the executable is in the folder, and if so, concat again.
-    if os.path.exists(os.path.join(folder, options.executable)):
+        options.executable = 'Merdian-Desk.exe'
+    if not os.path.isabs(options.executable):
         options.executable = os.path.join(folder, options.executable)
     folder_path = os.path.abspath(folder)
     exe: str = os.path.abspath(options.executable)
@@ -142,7 +149,11 @@ if __name__ == '__main__':
     if not in_source_folder:
         print("The executable must locate in source folder")
         exit(-1)
-    exe = '.' + exe[len(folder_path):]
+    if not os.path.isfile(exe) or os.path.islink(exe):
+        parser.error('The branded executable must be a real file in the input bundle.')
+    exe = './' + os.path.relpath(exe, folder_path).replace('\\', '/')
+    if normalize(exe) != 'merdian-desk.exe':
+        parser.error('The launch executable must be Merdian-Desk.exe at the bundle root.')
     print("Executable path: " + exe)
     print("Compression level: " + str(options.level))
     md5_table = generate_md5_table(
@@ -151,5 +162,4 @@ if __name__ == '__main__':
         write_blob(md5_table, os.path.abspath(options.package), exe)
     else:
         write_package_metadata(md5_table, output_folder, exe)
-        write_app_metadata(output_folder)
         build_portable(output_folder, options.target)

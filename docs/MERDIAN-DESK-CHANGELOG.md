@@ -6,6 +6,7 @@ The user approved a separately built branded client while retaining the unmodifi
 
 - Added the Merdian-Desk app name, teal monogram, light and dark action colors, and Windows product metadata and icon. The native window class is separate from an installed RustDesk app; the existing Rust/Flutter ABI remains compatible.
 - Added a host ID, Accept, Disconnect and Exit onboarding guide using existing Flutter widgets. Host approval and session controls retain the upstream connection-manager implementation.
+- Main-window Exit and X await owned-session cleanup and terminate the Merdian-Desk process. Closing a remote session subwindow retains its existing session-close behavior; the attended host no longer hides in the background when its main window is closed.
 - Removed password, install, update, service, elevation, camera, remote restart, input-blocking, privacy, terminal, tunnel, RDP, peer shortcut and wake-on-LAN affordances from this attended pilot's interface. The Rust policy separately enforces the attended-only behavior and relay configuration; hiding a control alone does not enforce policy.
 - Kept the RustDesk copyright, powered-by disclosure, AGPL-3.0 notice and upstream links. The modified client must ship with corresponding modified source and build information under AGPL-3.0.
 

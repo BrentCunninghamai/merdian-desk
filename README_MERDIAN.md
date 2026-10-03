@@ -4,7 +4,7 @@ Merdian-Desk is a modified RustDesk 1.5.0 client for attended support on Windows
 
 This pilot starts only in a signed-in user's normal, non-elevated session. The host must approve each new connection with **Accept**. **Disconnect** ends the current session; **Exit Merdian-Desk** closes the host and its tracked children. Installation, Windows services, startup persistence, elevation, unattended password approval and automatic updates are disabled in this pilot. The backend pins `relay.meridianremote.site` and its public key, forces relay use, and rejects direct addresses or alternate servers.
 
-The new app name, teal icon, host guide and Windows identity are part of this source. The upstream copyright and AGPL license are retained. See [modification notes](docs/MERDIAN-DESK-CHANGELOG.md), [source and license notice](docs/MERDIAN-DESK-LICENSE-MODIFICATIONS.md), and [LICENSE](LICENSE).
+The new app name, teal icon, host guide and Windows identity are part of this source. The upstream copyright and AGPL license are retained. See [modification notes](docs/MERDIAN-DESK-CHANGELOG.md), [source and license notice](docs/MERDIAN-DESK-LICENSE-MODIFICATIONS.md), and [LICENCE](LICENCE).
 
 ## Build and qualification status
 

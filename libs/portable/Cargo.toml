@@ -2,17 +2,22 @@
 name = "rustdesk-portable-packer"
 version = "1.5.0"
 edition = "2021"
-description = "RustDesk Remote Desktop"
+description = "Merdian-Desk attended remote support, based on RustDesk"
+license = "AGPL-3.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 build = "build.rs"
 
+[[bin]]
+name = "merdian-desk-portable"
+path = "src/main.rs"
+
 [dependencies]
 brotli = "3.4"
 dirs = "5.0"
 md5 = "0.7"
-winapi = { version = "0.3", features = ["winbase", "libloaderapi"] }
+winapi = { version = "0.3", features = ["winbase", "libloaderapi", "winnt", "shellapi", "winuser", "handleapi", "jobapi2", "processthreadsapi", "securitybaseapi", "synchapi", "sysinfoapi"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [
@@ -26,10 +31,11 @@ windows = { version = "0.61", features = [
 native-windows-gui = {version = "1.0", default-features = false, features = ["animation-timer", "image-decoder"]}
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2026 Purslane Tech Pte. Ltd. All rights reserved."
-ProductName = "RustDesk"
-OriginalFilename = "rustdesk.exe"
-FileDescription = "RustDesk Remote Desktop"
+LegalCopyright = "Merdian-Desk modifications © 2026 contributors. Includes RustDesk © Purslane Tech Pte. Ltd. AGPL-3.0."
+CompanyName = "Merdian-Desk"
+ProductName = "Merdian-Desk"
+OriginalFilename = "Merdian-Desk.exe"
+FileDescription = "Merdian-Desk attended remote support"
 #ProductVersion = ""
 
 [target.'cfg(target_os="windows")'.build-dependencies]

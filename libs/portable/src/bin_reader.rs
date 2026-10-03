@@ -1,16 +1,17 @@
 use std::{
     collections::HashSet,
     fs::{self},
-    io::{Cursor, Read},
+    io::{Cursor, Read, Write},
     path::Path,
 };
 
-// The generic payload, shared by every customer and compiled in once per release.
-#[cfg(windows)]
+// The complete reviewed Merdian-Desk bundle is compiled into this owned wrapper.
+#[cfg(all(windows, not(test)))]
 const BIN_DATA: &[u8] = include_bytes!("../data.bin");
+#[cfg(all(windows, test))]
+const BIN_DATA: &[u8] = b"rustdeskrustdeskMerdian-Desk.exe";
 
-// The per-customer payload, injected into the RCDATA resource after the template
-// has been built, so that customizing a client needs no recompilation.
+// Detect upstream injected packages so this attended wrapper can reject them.
 #[cfg(windows)]
 const PACKAGE_RESOURCE_NAME: &str = "RDPKG";
 
@@ -23,7 +24,7 @@ const BUF_SIZE: usize = 4096;
 
 pub(crate) struct BinaryData {
     pub md5_code: &'static [u8],
-    // compressed gzip data
+    // compressed Brotli data
     pub raw: &'static [u8],
     pub path: String,
 }
@@ -31,27 +32,35 @@ pub(crate) struct BinaryData {
 pub(crate) struct BinaryReader {
     pub files: Vec<BinaryData>,
     pub exe: String,
-    // Paths supplied by the per-customer package. Recorded so that a file dropped
-    // from a later package -- a logo the customer removed, say -- can be deleted
-    // from an existing extraction, which the timestamp wipe no longer covers now
-    // that the packer is built once per release rather than once per customer.
-    pub package_paths: Vec<String>,
 }
 
 impl BinaryReader {
     pub fn new() -> Result<Self, String> {
         let package = read_package()?;
-        let package_paths = package.0.iter().map(|f| f.path.clone()).collect();
-        let (files, exe) = merge(read_embedded()?, package);
-        Ok(Self {
-            files,
-            exe,
-            package_paths,
-        })
+        if !package.0.is_empty() || !package.1.is_empty() {
+            return Err("External package overrides are disabled for Merdian-Desk".into());
+        }
+        let (files, exe) = read_embedded()?;
+        crate::policy::validate_payload_exe(&exe).map_err(str::to_owned)?;
+        let mut names = HashSet::new();
+        for file in &files {
+            if crate::policy::resolve_payload_path(Path::new("payload"), &file.path).is_none()
+                || !names.insert(normalize_path(&file.path))
+            {
+                return Err(
+                    "The package contains an invalid or duplicated Windows file path".into(),
+                );
+            }
+        }
+        if !names.contains(&normalize_path(&exe)) {
+            return Err("The package does not contain its branded executable".into());
+        }
+        Ok(Self { files, exe })
     }
 }
 
 // Folds the per-customer package into the generic payload.
+#[cfg(test)]
 fn merge(
     embedded: (Vec<BinaryData>, String),
     package: (Vec<BinaryData>, String),
@@ -201,36 +210,40 @@ fn read_resource(name: &str) -> Option<&'static [u8]> {
 }
 
 impl BinaryData {
-    fn decompress(&self) -> Vec<u8> {
+    fn decompress(&self) -> Result<Vec<u8>, String> {
         let cursor = Cursor::new(self.raw);
         let mut decoder = brotli::Decompressor::new(cursor, BUF_SIZE);
         let mut buf = Vec::new();
-        decoder.read_to_end(&mut buf).ok();
-        buf
+        decoder
+            .read_to_end(&mut buf)
+            .map_err(|error| format!("Cannot decompress {}: {error}", self.path))?;
+        let digest = format!("{:x}", md5::compute(&buf));
+        if digest.as_bytes() != self.md5_code {
+            return Err(format!("Package checksum failed: {}", self.path));
+        }
+        Ok(buf)
     }
 
-    pub fn write_to_file(&self, prefix: &Path) {
-        let p = prefix.join(&self.path);
-        if let Some(parent) = p.parent() {
-            if !parent.exists() {
-                let _ = fs::create_dir_all(parent);
-            }
+    pub fn write_to_file(&self, prefix: &Path) -> Result<std::path::PathBuf, String> {
+        let path = crate::policy::resolve_payload_path(prefix, &self.path)
+            .ok_or("Package path escaped its extraction directory")?;
+        crate::policy::prepare_parent(prefix, &path).map_err(|error| error.to_string())?;
+        let content = self.decompress()?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| format!("Cannot extract {}: {error}", self.path))?;
+        file.write_all(&content)
+            .map_err(|error| format!("Cannot write {}: {error}", self.path))?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        drop(file);
+        let written =
+            fs::read(&path).map_err(|error| format!("Extracted file unavailable: {error}"))?;
+        if written != content {
+            return Err(format!("Extracted file changed: {}", self.path));
         }
-        if p.exists() {
-            // check md5
-            let f = fs::read(p.clone()).unwrap_or_default();
-            let digest = format!("{:x}", md5::compute(&f));
-            let md5_record = String::from_utf8_lossy(self.md5_code);
-            if digest == md5_record {
-                // same, skip this file
-                println!("skip {}", &self.path);
-                return;
-            } else {
-                println!("writing {}", p.display());
-                println!("{} -> {}", md5_record, digest)
-            }
-        }
-        let _ = fs::write(p, self.decompress());
+        Ok(path)
     }
 }
 
@@ -255,6 +268,50 @@ impl BinaryReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn compressed_file(path: &str, content: &[u8]) -> BinaryData {
+        let mut raw = Vec::new();
+        {
+            let mut encoder = brotli::CompressorWriter::new(&mut raw, BUF_SIZE, 4, 22);
+            encoder.write_all(content).unwrap();
+        }
+        BinaryData {
+            path: path.into(),
+            raw: Box::leak(raw.into_boxed_slice()),
+            md5_code: Box::leak(
+                format!("{:x}", md5::compute(content))
+                    .into_bytes()
+                    .into_boxed_slice(),
+            ),
+        }
+    }
+
+    #[test]
+    fn bad_checksum_is_rejected_before_writing_a_file() {
+        let mut file = compressed_file("test-data.txt", b"ordinary unit test data");
+        file.md5_code = b"00000000000000000000000000000000";
+        assert!(file.decompress().unwrap_err().contains("checksum failed"));
+    }
+
+    #[test]
+    fn extraction_preserves_bytes_and_refuses_to_replace_a_cached_file() {
+        let root = std::env::temp_dir().join(format!(
+            "merdian-extract-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let file = compressed_file("test-data.txt", b"ordinary unit test data");
+        let path = file.write_to_file(&root).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"ordinary unit test data");
+        assert!(file.write_to_file(&root).is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"ordinary unit test data");
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
 
     // Builds a blob in the same layout generate.py writes, so these tests pin the
     // cross-language format contract as well as the merge rules.
