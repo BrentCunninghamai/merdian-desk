@@ -4,6 +4,11 @@ pub const APP_NAME: &str = "Merdian-Desk";
 pub const RELAY: &str = "relay.meridianremote.site";
 pub const PUBLIC_KEY: &str = "wXOaIJn3BpQ4ss1bpTSEwDkbntNljbnNzGzUUmpEIug=";
 
+/// Service payload requires admission; a local close control must always drain.
+pub fn service_egress_allowed(session_access_allowed: bool, local_stop: bool) -> bool {
+    session_access_allowed || local_stop
+}
+
 /// Host feature policy wins over saved Full Access mode and server ACL grants.
 /// Those inputs still govern the ordinary attended support features.
 pub fn effective_host_permission(
@@ -181,6 +186,19 @@ mod tests {
         assert!(!consent.may_access_session(true, true));
         assert!(!consent.accept_local());
         assert!(!SessionConsent::default().may_access_session(true, true));
+    }
+    #[test]
+    fn local_stop_closes_pending_and_closed_without_admitting_payload() {
+        for consent in [SessionConsent::Pending, SessionConsent::Closed] {
+            let access = consent.may_access_session(true, true);
+            assert!(!service_egress_allowed(access, false));
+            assert!(service_egress_allowed(access, true));
+        }
+        let mut consent = SessionConsent::default();
+        assert!(consent.accept_local());
+        assert!(service_egress_allowed(consent.may_access_session(true, true), false));
+        consent.close();
+        assert!(!service_egress_allowed(consent.may_access_session(true, true), false));
     }
     #[test]
     fn full_access_and_server_acl_cannot_restore_forbidden_features() {

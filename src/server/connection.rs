@@ -75,6 +75,13 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use crate::virtual_display_manager;
 pub type Sender = mpsc::UnboundedSender<(Instant, Arc<Message>)>;
 
+// Used only for locally produced service queues, never network ingress.
+fn service_message_allowed(session_access_allowed: bool, msg: &Message) -> bool {
+    let local_stop = matches!(&msg.union, Some(message::Union::Misc(m))
+        if matches!(&m.union, Some(misc::Union::StopService(_))));
+    crate::merdian_policy_model::service_egress_allowed(session_access_allowed, local_stop)
+}
+
 const FAILURE_IDX_ID_WHITELIST: usize = 2;
 // How long a rejection counts, so also how long a blocked address stays blocked. Longer
 // throttles enumeration harder; shorter limits collateral on whitelisted neighbours.
@@ -501,7 +508,7 @@ impl Subscriber for ConnInner {
 
     #[inline]
     fn send(&mut self, msg: Arc<Message>) {
-        if !self.session_data_allowed() {
+        if !service_message_allowed(self.session_data_allowed(), &msg) {
             return;
         }
         // Send SwitchDisplay on the same channel as VideoFrame to avoid send order problems.
@@ -1140,10 +1147,7 @@ impl Connection {
                 Some((instant, value)) = rx.recv() => {
                     // A service subscription is not consent. Keep the stop control
                     // message, but discard all queued host payload while pending/closed.
-                    if !conn.session_access_allowed()
-                        && !matches!(&value.union, Some(message::Union::Misc(m))
-                            if matches!(&m.union, Some(misc::Union::StopService(_))))
-                    {
+                    if !service_message_allowed(conn.session_access_allowed(), &value) {
                         continue;
                     }
                     let latency = instant.elapsed().as_millis() as i64;
