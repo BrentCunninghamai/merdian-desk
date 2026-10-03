@@ -86,11 +86,13 @@ pub fn update_controlling_session_count(count: usize) {
 
 #[allow(dead_code)]
 pub fn start_auto_update() {
+    if crate::merdian_policy::active() { return; }
     let _sender = TX_MSG.lock().unwrap();
 }
 
 #[allow(dead_code)]
 pub fn manually_check_update() -> ResultType<()> {
+    if crate::merdian_policy::active() { return Ok(()); }
     let sender = TX_MSG.lock().unwrap();
     sender.send(UpdateMsg::CheckUpdate)?;
     Ok(())
@@ -174,6 +176,7 @@ fn start_auto_update_check_(rx_msg: Receiver<UpdateMsg>) {
 }
 
 fn check_update(manually: bool) -> ResultType<()> {
+    if crate::merdian_policy::active() { return Ok(()); }
     // On macOS, auto-update is handled by check_update_as_root() in the service process.
     // The shared check_update() path is only used for manual update checks from the GUI.
     #[cfg(target_os = "macos")]

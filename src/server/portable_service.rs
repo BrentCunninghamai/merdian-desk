@@ -447,6 +447,9 @@ pub mod server {
     }
 
     pub fn run_portable_service() {
+        if crate::merdian_policy::active() {
+            return;
+        }
         let shmem_name = match portable_service_shmem_name_from_args() {
             Some(name) => name,
             None => {
@@ -995,6 +998,7 @@ pub mod client {
     // 2) Start helper process (direct or logon) with shmem argument.
     // 3) Keep STARTING=true until IPC ping/pong marks RUNNING, or timeout watchdog resets it.
     pub(crate) fn start_portable_service(para: StartPara) -> ResultType<()> {
+        if crate::merdian_policy::active() { bail!("Portable services are disabled in the attended pilot"); }
         log::info!("start portable service");
         let launch_token = {
             // Keep lock guards in explicit short scopes to make it obvious

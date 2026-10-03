@@ -99,12 +99,14 @@ pub fn get_id() -> String {
 
 #[inline]
 pub fn goto_install() {
+    if crate::merdian_policy::active() { return; }
     allow_err!(crate::run_me(vec!["--install"]));
     std::process::exit(0);
 }
 
 #[inline]
 pub fn install_me(_options: String, _path: String, _silent: bool, _debug: bool) {
+    if crate::merdian_policy::active() { return; }
     #[cfg(windows)]
     std::thread::spawn(move || {
         allow_err!(crate::platform::windows::install_me(
@@ -116,6 +118,7 @@ pub fn install_me(_options: String, _path: String, _silent: bool, _debug: bool) 
 
 #[inline]
 pub fn update_me(_path: String) {
+    if crate::merdian_policy::active() { return; }
     goto_install();
 }
 

@@ -161,15 +161,17 @@ pub fn new() -> ServerPtr {
     }
     #[cfg(all(target_os = "windows", feature = "flutter"))]
     {
-        match printer_service::init(&crate::get_app_name()) {
-            Ok(()) => {
-                log::info!("printer service initialized");
-                server.add_service(Box::new(printer_service::new(
-                    printer_service::NAME.to_owned(),
-                )));
-            }
-            Err(e) => {
-                log::error!("printer service init failed: {}", e);
+        if !crate::merdian_policy::active() {
+            match printer_service::init(&crate::get_app_name()) {
+                Ok(()) => {
+                    log::info!("printer service initialized");
+                    server.add_service(Box::new(printer_service::new(
+                        printer_service::NAME.to_owned(),
+                    )));
+                }
+                Err(e) => {
+                    log::error!("printer service init failed: {}", e);
+                }
             }
         }
     }
@@ -614,6 +616,21 @@ impl Drop for Server {
         #[cfg(target_os = "linux")]
         wayland::clear();
     }
+}
+
+/// Stop only children spawned by this process when its attended host exits.
+pub fn close_attended_children() {
+    if !crate::merdian_policy::active() {
+        return;
+    }
+    input_service::fix_key_down_timeout_at_exit();
+    let mut children = CHILD_PROCESS.lock().unwrap();
+    for child in children.iter_mut() {
+        if let Err(error) = child.kill() {
+            log::debug!("Attended child already closed or could not be stopped: {}", error);
+        }
+    }
+    children.clear();
 }
 
 pub fn check_zombie() {

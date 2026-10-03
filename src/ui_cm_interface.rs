@@ -1715,6 +1715,7 @@ fn cm_inner_send(id: i32, data: Data) {
 }
 
 pub fn can_elevate() -> bool {
+    if crate::merdian_policy::active() { return false; }
     #[cfg(windows)]
     return !crate::platform::is_installed();
     #[cfg(not(windows))]
@@ -1722,6 +1723,7 @@ pub fn can_elevate() -> bool {
 }
 
 pub fn elevate_portable(_id: i32) {
+    if crate::merdian_policy::active() { return; }
     #[cfg(windows)]
     {
         let lock = CLIENTS.read().unwrap();

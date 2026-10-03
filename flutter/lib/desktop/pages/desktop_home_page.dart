@@ -13,6 +13,7 @@ import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
+import 'package:flutter_hbb/desktop/widgets/merdian_attended_support.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -79,8 +80,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     final isIncomingOnly = bind.isIncomingOnly();
     final isOutgoingOnly = bind.isOutgoingOnly();
     final children = <Widget>[
-      if (!isOutgoingOnly) buildPresetPasswordWarning(),
-      if (bind.isCustomClient())
+      if (!isOutgoingOnly && !isMerdianDesk) buildPresetPasswordWarning(),
+      if (bind.isCustomClient() && !isMerdianDesk)
         Align(
           alignment: Alignment.center,
           child: loadPowered(context),
@@ -91,7 +92,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       ),
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
-      if (!isOutgoingOnly) buildPasswordBoard(context),
+      if (!isOutgoingOnly && !isMerdianDesk) buildPasswordBoard(context),
+      if (isMerdianDesk)
+        MerdianSupportGuide(onExit: () async {
+          await bind.mainOnMainWindowClose();
+          await windowManager.close();
+        }),
+      if (isMerdianDesk) loadPowered(context),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -126,6 +133,19 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       ]);
     }
     final textColor = Theme.of(context).textTheme.titleLarge?.color;
+    if (isMerdianDesk) {
+      return ChangeNotifierProvider.value(
+        value: gFFI.serverModel,
+        child: Container(
+          width: 260,
+          color: Theme.of(context).colorScheme.background,
+          child: SingleChildScrollView(
+            controller: _leftPaneScrollController,
+            child: Column(key: _childKey, children: children),
+          ),
+        ),
+      );
+    }
     return ChangeNotifierProvider.value(
       value: gFFI.serverModel,
       child: Container(
@@ -387,6 +407,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   buildTip(BuildContext context) {
+    if (isMerdianDesk) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
+        child: Text('This PC · Your support ID',
+            style: Theme.of(context).textTheme.titleSmall),
+      );
+    }
     final isOutgoingOnly = bind.isOutgoingOnly();
     return Padding(
       padding:
@@ -428,7 +455,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildHelpCards(String updateUrl) {
-    if (!bind.isCustomClient() &&
+    if (!isMerdianDesk && !bind.isCustomClient() &&
         updateUrl.isNotEmpty &&
         !isCardClosed &&
         bind.mainUriPrefixSync().contains('rustdesk')) {
@@ -458,7 +485,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       return buildInstallCard("", systemError, "", () {});
     }
 
-    if (isWindows && !bind.isDisableInstallation()) {
+    if (isWindows && !isMerdianDesk && !bind.isDisableInstallation()) {
       if (!bind.mainIsInstalled()) {
         return buildInstallCard(
             "", bind.isOutgoingOnly() ? "" : "install_tip", "Install",

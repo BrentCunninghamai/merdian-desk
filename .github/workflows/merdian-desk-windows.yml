@@ -1,0 +1,155 @@
+name: Merdian-Desk attended Windows build
+
+on:
+  push:
+    branches:
+      - merdian-desk/pilot
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: merdian-desk-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'BrentCunninghamai/merdian-desk'
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      VCPKG_DISABLE_METRICS: '1'
+      VCPKG_DEFAULT_TRIPLET: x64-windows-static
+      VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+      VCPKG_MAX_CONCURRENCY: '4'
+      CARGO_BUILD_JOBS: '4'
+      RUST_LOG: info
+    steps:
+      - name: Check out corresponding modified source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Verify attended pilot source and initialize tool paths
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path src/merdian_policy.rs) -or -not (Test-Path flutter/lib/desktop/widgets/merdian_attended_support.dart)) { throw 'Attended pilot source is missing.' }
+          $tools = Join-Path $env:RUNNER_TEMP 'merdian-tools'
+          New-Item -ItemType Directory -Path $tools -Force | Out-Null
+          "MERDIAN_TOOLS=$tools" >> $env:GITHUB_ENV
+          "VCPKG_ROOT=$tools\vcpkg" >> $env:GITHUB_ENV
+          "VCPKG_INSTALLED_ROOT=$tools\vcpkg\installed" >> $env:GITHUB_ENV
+          "PUB_CACHE=$tools\pub-cache" >> $env:GITHUB_ENV
+          "LIBCLANG_PATH=$tools\llvm\bin" >> $env:GITHUB_ENV
+          "FLUTTER_ROOT=$tools\flutter" >> $env:GITHUB_ENV
+          "VCPKG_BINARY_SOURCES=clear;files,$tools\vcpkg-cache,readwrite" >> $env:GITHUB_ENV
+
+      - name: Restore native binary cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/merdian-tools/vcpkg-cache
+          key: merdian-x64-static-9e593bb-${{ hashFiles('vcpkg.json', 'res/vcpkg/**', 'res/vcpkg-triplets/**') }}
+
+      - name: Prepare pinned Rust, Flutter, LLVM and upstream engine
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Receive-CheckedFile([string]$Uri,[string]$Path,[string]$Sha256) {
+            Invoke-WebRequest -Uri $Uri -OutFile $Path
+            if ((Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Sha256) { throw 'An official tool archive differs from its reviewed hash.' }
+          }
+          rustup toolchain install 1.75.0 --profile minimal --component rustfmt
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
+          rustup override set 1.75.0
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain selection failed.' }
+          Receive-CheckedFile 'https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.24.5-stable.zip' "$env:MERDIAN_TOOLS\flutter.zip" 'b8a7485acd3c6fb23a76b7ac09f89e8d93d62fbff7147c6f5f8c5686d949eeac'
+          & 'C:\Program Files\7-Zip\7z.exe' x "$env:MERDIAN_TOOLS\flutter.zip" "-o$env:MERDIAN_TOOLS" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter SDK extraction failed.' }
+          "$env:FLUTTER_ROOT\bin" >> $env:GITHUB_PATH
+          $env:PATH = "$env:FLUTTER_ROOT\bin;$env:PATH"
+          flutter precache --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows artifacts failed.' }
+          Receive-CheckedFile 'https://github.com/llvm/llvm-project/releases/download/llvmorg-15.0.6/LLVM-15.0.6-win64.exe' "$env:MERDIAN_TOOLS\llvm.exe" '22e2f2c38be4c44db7a1e9da5e67de2a453c5b4be9cf91e139592a63877ac0a2'
+          & 'C:\Program Files\7-Zip\7z.exe' x "$env:MERDIAN_TOOLS\llvm.exe" "-o$env:MERDIAN_TOOLS\llvm" -y | Out-Null
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:LIBCLANG_PATH\libclang.dll")) { throw 'LLVM extraction failed.' }
+          Receive-CheckedFile 'https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip' "$env:MERDIAN_TOOLS\engine.zip" 'ec8cabf36ee4ff24c8d98de25b00e70781eb03876265aee84d0fe554a110036e'
+          & 'C:\Program Files\7-Zip\7z.exe' x "$env:MERDIAN_TOOLS\engine.zip" "-o$env:MERDIAN_TOOLS\engine" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Upstream engine extraction failed.' }
+          $enginePayload = "$env:MERDIAN_TOOLS\engine"
+          if (Test-Path "$enginePayload\windows-x64-release" -PathType Container) { $enginePayload = "$enginePayload\windows-x64-release" }
+          foreach ($engineFile in @('flutter_windows.dll','flutter_windows.dll.lib','gen_snapshot.exe')) {
+            if (-not (Test-Path "$enginePayload\$engineFile" -PathType Leaf)) { throw "Reviewed engine payload is missing: $engineFile" }
+          }
+          $engineDestination = "$env:FLUTTER_ROOT\bin\cache\artifacts\engine\windows-x64-release"
+          Copy-Item -Path "$enginePayload\*" -Destination $engineDestination -Recurse -Force
+          if ((Get-FileHash "$enginePayload\flutter_windows.dll").Hash -ne (Get-FileHash "$engineDestination\flutter_windows.dll").Hash) { throw 'The installed SDK engine differs from the reviewed payload.' }
+          git -C $env:FLUTTER_ROOT apply --check "$env:GITHUB_WORKSPACE\.github\patches\flutter_3.24.4_dropdown_menu_enableFilter.diff"
+          if ($LASTEXITCODE -ne 0) { throw 'Upstream Flutter patch does not match the pinned SDK.' }
+          git -C $env:FLUTTER_ROOT apply "$env:GITHUB_WORKSPACE\.github\patches\flutter_3.24.4_dropdown_menu_enableFilter.diff"
+          if ($LASTEXITCODE -ne 0) { throw 'Upstream Flutter patch failed.' }
+
+      - name: Build full pinned x64 native codec dependencies
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg clone failed.' }
+          git -C $env:VCPKG_ROOT checkout 9e593bb18ea69cc5095e012465dcd675a822ed0d
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg baseline selection failed.' }
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg bootstrap failed.' }
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows-static "--x-install-root=$env:VCPKG_INSTALLED_ROOT"
+          if ($LASTEXITCODE -ne 0) { throw 'Full native codec dependency build failed.' }
+
+      - name: Generate bridge from the final Rust API
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo install cargo-expand --version 1.0.95 --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned cargo-expand installation failed.' }
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned FRB installation failed.' }
+          Push-Location flutter
+          try { flutter pub get; if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency resolution failed.' } } finally { Pop-Location }
+          flutter_rust_bridge_codegen --rust-input src/flutter_ffi.rs --dart-output flutter/lib/generated_bridge.dart --c-output flutter/macos/Runner/bridge_generated.h --llvm-path "$env:MERDIAN_TOOLS\llvm"
+          if ($LASTEXITCODE -ne 0) { throw 'Final API bridge generation failed.' }
+          Copy-Item flutter/macos/Runner/bridge_generated.h flutter/ios/Runner/bridge_generated.h -Force
+
+      - name: Test attended policy and onboarding
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustc --edition 2021 --test src/merdian_policy_model.rs -o "$env:RUNNER_TEMP\merdian-policy-tests.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Attended policy model compilation failed.' }
+          & "$env:RUNNER_TEMP\merdian-policy-tests.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Attended policy tests failed.' }
+          Push-Location flutter
+          try {
+            flutter test test/merdian_attended_support_test.dart
+            if ($LASTEXITCODE -ne 0) { throw 'Attended onboarding tests failed.' }
+            dart analyze lib/desktop/widgets/merdian_attended_support.dart test/merdian_attended_support_test.dart
+            if ($LASTEXITCODE -ne 0) { throw 'Attended onboarding analysis failed.' }
+          } finally { Pop-Location }
+
+      - name: Compile Windows Flutter client with hardware codec features
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+          if ($LASTEXITCODE -ne 0) { throw 'Complete Windows build failed.' }
+          $output = 'flutter/build/windows/x64/runner/Release'
+          foreach ($file in @('rustdesk.exe','librustdesk.dll','flutter_windows.dll')) {
+            if (-not (Test-Path "$output/$file") -or (Get-Item "$output/$file").Length -lt 10000) { throw "Build output is missing: $file" }
+          }
+          $hashes = Get-ChildItem -LiteralPath $output -File -Recurse | ForEach-Object { [ordered]@{path=$_.FullName.Substring((Resolve-Path $output).Path.Length+1); size=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()} }
+          [ordered]@{source_commit=$env:GITHUB_SHA; built_at_utc=[DateTime]::UtcNow.ToString('o'); features=@('flutter','hwcodec','vram'); compiled=$true; packaged=$false; signed=$false; installed=$false; published=$false; attended_session_verified=$false; files=@($hashes)} | ConvertTo-Json -Depth 6 | Set-Content "$output/merdian-build-evidence.json" -Encoding utf8NoBOM
+
+      - name: Retain unqualified review build bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: merdian-desk-windows-x64-review
+          path: flutter/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 7

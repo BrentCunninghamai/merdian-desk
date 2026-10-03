@@ -39,6 +39,10 @@ lazy_static::lazy_static! {
 }
 
 fn initialize(app_dir: &str, custom_client_config: &str) {
+    if let Err(error)=crate::merdian_policy::require_startup() {
+        eprintln!("{}",error);
+        std::process::exit(1);
+    }
     flutter::async_tasks::start_flutter_async_runner();
     // `APP_DIR` is set in `main_get_data_dir_ios()` on iOS.
     #[cfg(not(target_os = "ios"))]
@@ -2446,6 +2450,9 @@ pub fn main_account_auth_result() -> String {
 }
 
 pub fn main_on_main_window_close() {
+    if crate::merdian_policy::active() {
+        crate::server::close_attended_children();
+    }
     // may called more than one times
     #[cfg(windows)]
     crate::portable_service::client::drop_portable_service_shared_memory();

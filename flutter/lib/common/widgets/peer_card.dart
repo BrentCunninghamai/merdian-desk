@@ -969,28 +969,28 @@ class RecentPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
+      if (!isMerdianDesk) _viewCameraAction(context),
+      if (!isMerdianDesk) _terminalAction(context),
     ];
 
     if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
+      if (!isMerdianDesk) menuItems.add(_terminalRunAsAdminAction(context));
     }
 
     final List favs = (await bind.mainGetFav()).toList();
 
     if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
+      if (!isMerdianDesk) menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
     }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
+      if (!isMerdianDesk) menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
+      if (!isMerdianDesk) menuItems.add(_createShortCutAction(peer.id));
     }
     menuItems.add(MenuEntryDivider());
     if (isMobile || isDesktop || isWebDesktop) {
@@ -1034,26 +1034,26 @@ class FavoritePeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
+      if (!isMerdianDesk) _viewCameraAction(context),
+      if (!isMerdianDesk) _terminalAction(context),
     ];
 
     if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
+      if (!isMerdianDesk) menuItems.add(_terminalRunAsAdminAction(context));
     }
 
     if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
+      if (!isMerdianDesk) menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
     }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
+      if (!isMerdianDesk) menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
+      if (!isMerdianDesk) menuItems.add(_createShortCutAction(peer.id));
     }
     menuItems.add(MenuEntryDivider());
     if (isMobile || isDesktop || isWebDesktop) {
@@ -1094,29 +1094,29 @@ class DiscoveredPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
+      if (!isMerdianDesk) _viewCameraAction(context),
+      if (!isMerdianDesk) _terminalAction(context),
     ];
 
     if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
+      if (!isMerdianDesk) menuItems.add(_terminalRunAsAdminAction(context));
     }
 
     final List favs = (await bind.mainGetFav()).toList();
 
     if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
+      if (!isMerdianDesk) menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
     }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
+      if (!isMerdianDesk) menuItems.add(_rdpAction(context, peer.id));
     }
-    menuItems.add(_wolAction(peer.id));
+    if (!isMerdianDesk) menuItems.add(_wolAction(peer.id));
     if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
+      if (!isMerdianDesk) menuItems.add(_createShortCutAction(peer.id));
     }
 
     if (!favs.contains(peer.id)) {
@@ -1153,26 +1153,26 @@ class AddressBookPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
+      if (!isMerdianDesk) _viewCameraAction(context),
+      if (!isMerdianDesk) _terminalAction(context),
     ];
 
     if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
+      if (!isMerdianDesk) menuItems.add(_terminalRunAsAdminAction(context));
     }
 
     if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
+      if (!isMerdianDesk) menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
     }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
+      if (!isMerdianDesk) menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
+      if (!isMerdianDesk) menuItems.add(_createShortCutAction(peer.id));
     }
     if (gFFI.abModel.current.canWrite()) {
       menuItems.add(MenuEntryDivider());
@@ -1310,26 +1310,26 @@ class MyGroupPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
+      if (!isMerdianDesk) _viewCameraAction(context),
+      if (!isMerdianDesk) _terminalAction(context),
     ];
 
     if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
+      if (!isMerdianDesk) menuItems.add(_terminalRunAsAdminAction(context));
     }
 
     if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
+      if (!isMerdianDesk) menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
     }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
+      if (!isMerdianDesk) menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
+      if (!isMerdianDesk) menuItems.add(_createShortCutAction(peer.id));
     }
     // menuItems.add(MenuEntryDivider());
     // menuItems.add(_renameAction(peer.id));

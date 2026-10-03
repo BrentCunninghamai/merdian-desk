@@ -562,18 +562,18 @@ class _ConnectionPageState extends State<ConnectionPage>
                                       'Transfer file',
                                       () => onConnect(isFileTransfer: true)
                                     ),
-                                    (
+                                    if (!isMerdianDesk) (
                                       'View camera',
                                       () => onConnect(isViewCamera: true)
                                     ),
-                                    (
+                                    if (!isMerdianDesk) (
                                       '${translate('Terminal')} (beta)',
                                       () => onConnect(isTerminal: true)
                                     ),
                                     // `connect` routes this through the
                                     // desktop path only; the peer card gates
                                     // it the same way.
-                                    if (isDesktop)
+                                    if (isDesktop && !isMerdianDesk)
                                       (
                                         'TCP tunneling',
                                         () => onConnect(isTcpTunneling: true)

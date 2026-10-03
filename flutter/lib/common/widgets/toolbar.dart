@@ -339,7 +339,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
 
   List<TTextMenu> v = [];
   // elevation
-  if (isDefaultConn &&
+  if (!isMerdianDesk && isDefaultConn &&
       perms['keyboard'] != false &&
       ffi.elevationModel.showRequestMenu) {
     v.add(
@@ -350,7 +350,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // osPassword
-  if (isDefaultConn && perms['keyboard'] != false) {
+  if (!isMerdianDesk && isDefaultConn && perms['keyboard'] != false) {
     v.add(
       TTextMenu(
         child: Row(children: [
@@ -464,17 +464,17 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           child: Text(translate('Transfer file')),
           onPressed: () => connectWithToken(isFileTransfer: true)),
     );
-    v.add(
+    if (!isMerdianDesk) v.add(
       TTextMenu(
           child: Text(translate('View camera')),
           onPressed: () => connectWithToken(isViewCamera: true)),
     );
-    v.add(
+    if (!isMerdianDesk) v.add(
       TTextMenu(
           child: Text('${translate('Terminal')} (beta)'),
           onPressed: () => connectWithToken(isTerminal: true)),
     );
-    v.add(
+    if (!isMerdianDesk) v.add(
       TTextMenu(
           child: Text(translate('TCP tunneling')),
           onPressed: () => connectWithToken(isTcpTunneling: true)),
@@ -519,7 +519,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // restart
-  if (isDefaultConn &&
+  if (!isMerdianDesk && isDefaultConn &&
       perms['restart'] != false &&
       (pi.platform == kPeerPlatformLinux ||
           pi.platform == kPeerPlatformWindows ||
@@ -532,7 +532,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // insertLock
-  if (isDefaultConn && !ffiModel.viewOnly && ffi.ffiModel.keyboard) {
+  if (!isMerdianDesk && isDefaultConn && !ffiModel.viewOnly && ffi.ffiModel.keyboard) {
     v.add(
       TTextMenu(
           child: Text(translate('Insert Lock')),
@@ -540,7 +540,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // blockUserInput
-  if (isDefaultConn &&
+  if (!isMerdianDesk && isDefaultConn &&
       ffi.ffiModel.keyboard &&
       ffi.ffiModel.permissions['block_input'] != false &&
       pi.platform == kPeerPlatformWindows) // privacy-mode != true ??

@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/desktop/widgets/refresh_wrapper.dart';
+import 'package:flutter_hbb/desktop/widgets/merdian_attended_support.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
@@ -247,6 +248,11 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
 
 class MyTheme {
   MyTheme._();
+
+  static ThemeData get appLightTheme =>
+      isMerdianDesk ? merdianTheme(lightTheme) : lightTheme;
+  static ThemeData get appDarkTheme =>
+      isMerdianDesk ? merdianTheme(darkTheme) : darkTheme;
 
   static const Color grayBg = Color(0xFFEFEFF2);
   static const Color accent = Color(0xFF0071FF);
@@ -3731,6 +3737,13 @@ Color? disabledTextColor(BuildContext context, bool enabled) {
 }
 
 Widget loadPowered(BuildContext context) {
+  if (isMerdianDesk) {
+    return TextButton(
+      onPressed: () => launchUrl(Uri.parse('https://github.com/rustdesk/rustdesk')),
+      child: const Text('Powered by RustDesk · AGPL-3.0',
+          textAlign: TextAlign.center, style: TextStyle(fontSize: 11)),
+    );
+  }
   if (bind.mainGetBuildinOption(key: "hide-powered-by-me") == 'Y') {
     return SizedBox.shrink();
   }
@@ -3819,9 +3832,11 @@ class _LogoState extends State<_Logo> {
 }
 
 // max 300 x 60
-Widget loadLogo() => const _Logo();
+Widget loadLogo() =>
+    isMerdianDesk ? const MerdianBrandBadge() : const _Logo();
 
 Widget loadIcon(double size) {
+  if (isMerdianDesk) return MerdianMark(size: size);
   return Image.asset('assets/icon.png',
       width: size,
       height: size,
@@ -4191,6 +4206,8 @@ String get appName {
   }
   return _appName;
 }
+
+bool get isMerdianDesk => isWindows && appName == merdianAppName;
 
 String getConnectionText(bool secure, bool direct, String streamType) {
   String connectionText;

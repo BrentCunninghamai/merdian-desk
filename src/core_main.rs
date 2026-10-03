@@ -30,6 +30,10 @@ macro_rules! my_println{
 /// If it returns [`Some`], then the process will continue, and flutter gui will be started.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn core_main() -> Option<Vec<String>> {
+    if let Err(error) = crate::merdian_policy::require_startup() {
+        my_println!("{}", error);
+        return None;
+    }
     if !crate::common::global_init() {
         return None;
     }
@@ -146,7 +150,7 @@ pub fn core_main() -> Option<Vec<String>> {
     }
     #[cfg(windows)]
     {
-        _is_quick_support |= !crate::platform::is_installed()
+        _is_quick_support |= !crate::merdian_policy::active() && !crate::platform::is_installed()
             && args.is_empty()
             && (is_quick_support_exe(&arg_exe)
                 || config::LocalConfig::get_option("pre-elevate-service") == "Y"
@@ -175,7 +179,7 @@ pub fn core_main() -> Option<Vec<String>> {
     }
 
     #[cfg(windows)]
-    if !crate::platform::is_installed()
+    if !crate::merdian_policy::active() && !crate::platform::is_installed()
         && args.is_empty()
         && _is_quick_support
         && !_is_elevate

@@ -11,7 +11,7 @@
 
 namespace {
 
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+constexpr const wchar_t kWindowClassName[] = L"MERDIAN_DESK_FLUTTER_RUNNER_WIN32_WINDOW";
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -19,7 +19,7 @@ static int g_active_window_count = 0;
 // Static variable to hold the custom icon (needs cleanup on exit)
 static HICON g_custom_icon_ = nullptr;
 
-// Try to load icon from data\flutter_assets\assets\icon.ico if it exists.
+// Try to load the bundled Merdian-Desk icon if it exists.
 // Returns nullptr if the file doesn't exist or can't be loaded.
 HICON LoadCustomIcon() {
   if (g_custom_icon_ != nullptr) {
@@ -37,7 +37,7 @@ HICON LoadCustomIcon() {
   }
 
   icon_path = icon_path.substr(0, last_slash + 1);
-  icon_path += L"data\\flutter_assets\\assets\\icon.ico";
+  icon_path += L"data\\flutter_assets\\assets\\merdian_mark.ico";
 
   // Check file attributes - reject if missing, directory, or reparse point (symlink/junction)
   DWORD file_attr = GetFileAttributesW(icon_path.c_str());
@@ -120,7 +120,7 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
     
-    // Try to load icon from data\flutter_assets\assets\icon.ico if it exists
+    // Try to load the bundled Merdian-Desk icon if it exists
     HICON custom_icon = LoadCustomIcon();
     if (custom_icon != nullptr) {
       window_class.hIcon = custom_icon;

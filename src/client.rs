@@ -375,9 +375,18 @@ impl Client {
         ),
         (i32, String),
     )> {
+        if crate::merdian_policy::active() {
+            crate::merdian_policy_model::validate_peer_id(peer)
+                .map_err(|error| hbb_common::anyhow::anyhow!(error))?;
+        }
         debug_assert!(peer == interface.get_id());
         interface.update_direct(None);
         interface.update_received(false);
+        let key = if crate::merdian_policy::active() {
+            crate::merdian_policy::PUBLIC_KEY
+        } else {
+            key
+        };
         match Self::_start(peer, key, token, conn_type, interface.clone()).await {
             Err(err) => {
                 let err_str = err.to_string();
@@ -455,6 +464,9 @@ impl Client {
         }
 
         let other_server = interface.get_lch().read().unwrap().other_server.clone();
+        if crate::merdian_policy::active() && other_server.is_some() {
+            bail!("Other rendezvous servers are disabled in the Merdian-Desk pilot");
+        }
         let (peer, other_server, key, token) = if let Some((a, b, c)) = other_server.as_ref() {
             (a.as_ref(), b.as_ref(), c.as_ref(), "")
         } else {
@@ -1341,6 +1353,9 @@ impl Client {
                 let _ = stop.send(());
             }
             bail!("Failed to connect via rendezvous server");
+        }
+        if crate::merdian_policy::active() {
+            relay_server = check_port(crate::merdian_policy::RELAY, RELAY_PORT);
         }
         let time_used = start.elapsed().as_millis() as u64;
         log::info!(
@@ -3003,7 +3018,7 @@ impl LoginConfigHandler {
         self.peer_relay =
             config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
                 || force_relay;
-        self.policy_relay = self.peer_relay || Config::is_proxy();
+        self.policy_relay = crate::merdian_policy::active() || self.peer_relay || Config::is_proxy();
         self.force_relay = self.policy_relay || use_ws();
         if let Some((real_id, server, key)) = &self.other_server {
             let other_server_key = self.get_option("other-server-key");

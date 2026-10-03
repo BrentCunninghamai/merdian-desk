@@ -763,6 +763,13 @@ async fn test_nat_type_() -> ResultType<bool> {
 }
 
 pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, bool) {
+    if crate::merdian_policy::active() {
+        return (
+            socket_client::check_port(crate::merdian_policy::RELAY, config::RENDEZVOUS_PORT),
+            Vec::new(),
+            true,
+        );
+    }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let (mut a, mut b) = get_rendezvous_server_(ms_timeout);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -859,6 +866,10 @@ pub fn refresh_rendezvous_server() {
 }
 
 pub fn run_me<T: AsRef<std::ffi::OsStr>>(args: Vec<T>) -> std::io::Result<std::process::Child> {
+    let policy_args=args.iter().map(|arg| arg.as_ref().to_string_lossy().into_owned()).collect::<Vec<_>>();
+    if let Err(error)=crate::merdian_policy_model::validate_args(&policy_args) {
+        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied,error));
+    }
     #[cfg(target_os = "linux")]
     if let Ok(appdir) = std::env::var("APPDIR") {
         let appimage_cmd = std::path::Path::new(&appdir).join("AppRun");
@@ -2007,6 +2018,9 @@ pub fn decode64<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>, base64::DecodeError
 }
 
 pub async fn get_key(sync: bool) -> String {
+    if crate::merdian_policy::active() {
+        return crate::merdian_policy::PUBLIC_KEY.to_owned();
+    }
     #[cfg(windows)]
     if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
         if !lic.key.is_empty() {
@@ -2358,6 +2372,10 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 }
 
 pub fn load_custom_client() {
+    if crate::merdian_policy::active() {
+        crate::merdian_policy::apply();
+        return;
+    }
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
@@ -2456,6 +2474,10 @@ pub fn get_dst_align_rgba() -> usize {
 }
 
 pub fn read_custom_client(config: &str) {
+    if crate::merdian_policy::active() {
+        crate::merdian_policy::apply();
+        return;
+    }
     let Ok(data) = decode64(config) else {
         log::error!("Failed to decode custom client config");
         return;

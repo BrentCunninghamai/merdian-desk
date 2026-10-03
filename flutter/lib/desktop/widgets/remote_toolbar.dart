@@ -1754,7 +1754,7 @@ class _DisplayMenuState extends State<_DisplayMenu> {
       ];
       // privacy mode
       final privacyModeState = PrivacyModeState.find(id);
-      if (ffi.connType == ConnType.defaultConn &&
+      if (!isMerdianDesk && ffi.connType == ConnType.defaultConn &&
           (pi.features.privacyMode || privacyModeState.isNotEmpty) &&
           (ffiModel.keyboard || privacyModeState.isNotEmpty)) {
         final privacyModeList =

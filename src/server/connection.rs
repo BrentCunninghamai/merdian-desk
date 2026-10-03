@@ -370,6 +370,7 @@ pub struct Connection {
     port_forward_address: String,
     tx_to_cm: mpsc::UnboundedSender<ipc::Data>,
     authorized: bool,
+    local_consent: crate::merdian_policy_model::SessionConsent,
     // The place among the unauthorized connections; given back at authorization.
     unauthorized_id: Option<UnauthorizedID>,
     require_2fa: Option<totp_rs::TOTP>,
@@ -586,6 +587,7 @@ impl Connection {
             port_forward_address: "".to_owned(),
             tx_to_cm,
             authorized: false,
+            local_consent: Default::default(),
             unauthorized_id: Some(unauthorized),
             keyboard: Self::permission(keys::OPTION_ENABLE_KEYBOARD, &control_permissions),
             clipboard: Self::permission(keys::OPTION_ENABLE_CLIPBOARD, &control_permissions),
@@ -749,6 +751,7 @@ impl Connection {
                 Some(data) = rx_from_cm.recv() => {
                     match data {
                         ipc::Data::Authorize => {
+                            if !conn.local_consent.accept_local() { break; }
                             conn.set_conn_audit_primary_auth(ConnAuditPrimaryAuth::Click);
                             conn.require_2fa.take();
                             if !conn.send_logon_response_and_keep_alive().await {
@@ -759,6 +762,7 @@ impl Connection {
                             }
                         }
                         ipc::Data::Close => {
+                            conn.local_consent.close();
                             conn.chat_unanswered = false; // seen
                             conn.file_transferred = false; //seen
                             conn.send_close_reason_no_retry("").await;
@@ -1842,6 +1846,11 @@ impl Connection {
     // `true` does not necessarily mean authorization succeeded (e.g. REQUIRE_2FA case).
     async fn send_logon_response_and_keep_alive(&mut self) -> bool {
         if self.authorized {
+            return true;
+        }
+        // Passwords, cached sessions, 2FA and side-switch tokens never authorize
+        // this attended fork before its local connection manager sends Accept.
+        if crate::merdian_policy::active() && !self.local_consent.can_authorize() {
             return true;
         }
         if self.require_2fa.is_some() && !self.is_recent_session(true) && !self.from_switch {
@@ -3100,6 +3109,10 @@ impl Connection {
                 }
             }
         } else if let Some(message::Union::SwitchSidesResponse(_s)) = msg.union {
+            if crate::merdian_policy::active() {
+                self.send_login_error("Start a new attended session and ask the host to Accept.").await;
+                return false;
+            }
             #[cfg(feature = "flutter")]
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             if let Some(lr) = _s.lr.clone().take() {
@@ -5232,6 +5245,7 @@ impl Connection {
     }
 
     async fn on_close(&mut self, reason: &str, lock: bool) {
+        self.local_consent.close();
         if self.closed {
             return;
         }

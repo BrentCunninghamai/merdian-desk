@@ -882,12 +882,20 @@ class _CmControlPanel extends StatelessWidget {
   buildAuthorized(BuildContext context) {
     final bool canElevate = bind.cmCanElevate();
     final model = Provider.of<ServerModel>(context);
-    final showElevation = canElevate &&
+    final showElevation = !isMerdianDesk && canElevate &&
         model.showElevation &&
         client.type_() == ClientType.remote;
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
+        if (isMerdianDesk)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Text('You are in control. '
+                'Choose Disconnect to end support.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, height: 1.3)),
+          ),
         Offstage(
           offstage: !client.inVoiceCall,
           child: Row(
@@ -1071,7 +1079,7 @@ class _CmControlPanel extends StatelessWidget {
   buildUnAuthorized(BuildContext context) {
     final bool canElevate = bind.cmCanElevate();
     final model = Provider.of<ServerModel>(context);
-    final showElevation = canElevate &&
+    final showElevation = !isMerdianDesk && canElevate &&
         model.showElevation &&
         client.type_() == ClientType.remote &&
         bind.mainGetBuildinOption(
@@ -1081,6 +1089,14 @@ class _CmControlPanel extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
+        if (isMerdianDesk)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Text('Accept only the colleague you expect. '
+                'You can Disconnect at any time.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, height: 1.3)),
+          ),
         Offstage(
           offstage: !showElevation || !showAccept,
           child: buildButton(context, color: Colors.green[700], onClick: () {

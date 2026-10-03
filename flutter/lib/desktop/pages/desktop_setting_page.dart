@@ -412,7 +412,7 @@ class _GeneralState extends State<_General> {
     return ListView(
       controller: scrollController,
       children: [
-        if (!isWeb) service(),
+        if (!isWeb && !isMerdianDesk) service(),
         theme(),
         _Card(title: 'Language', children: [language()]),
         if (!isWeb) hwcodec(),
@@ -509,7 +509,7 @@ class _GeneralState extends State<_General> {
           kOptionOpenNewConnInTabs,
           isServer: false,
         ),
-        Tooltip(
+        if (!isMerdianDesk) Tooltip(
           message: translate('port-forward-mux-tip'),
           child: _OptionCheckBox(
             context,
@@ -551,14 +551,14 @@ class _GeneralState extends State<_General> {
             ),
           ),
       ],
-      if (!isWeb && !bind.isCustomClient())
+      if (!isWeb && !isMerdianDesk && !bind.isCustomClient())
         _OptionCheckBox(
           context,
           'Check for software update on startup',
           kOptionEnableCheckUpdate,
           isServer: false,
         ),
-      if (showAutoUpdate)
+      if (showAutoUpdate && !isMerdianDesk)
         _OptionCheckBox(
           context,
           'Auto update',
@@ -2532,13 +2532,26 @@ class _AboutState extends State<_About> {
       final scrollController = ScrollController();
       return SingleChildScrollView(
         controller: scrollController,
-        child: _Card(title: translate('About RustDesk'), children: [
+        child: _Card(title: isMerdianDesk ? 'About Merdian-Desk' : translate('About RustDesk'), children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(
                 height: 8.0,
               ),
+              if (isMerdianDesk)
+                const SelectionArea(
+                  child: Text('Merdian-Desk is a modified RustDesk client for '
+                      'attended Windows 11 support. Powered by RustDesk. '
+                      'Licensed under AGPL-3.0; corresponding modified source '
+                      'and modification notes accompany this build.'),
+                ),
+              if (isMerdianDesk)
+                TextButton(
+                  onPressed: () => launchUrlString(
+                      'https://github.com/BrentCunninghamai/merdian-desk'),
+                  child: const Text('Merdian-Desk source and changes · AGPL-3.0'),
+                ),
               SelectionArea(
                   child: Text('${translate('Version')}: $version')
                       .marginSymmetric(vertical: 4.0)),
@@ -2569,7 +2582,7 @@ class _AboutState extends State<_About> {
                     style: linkStyle,
                   ).marginSymmetric(vertical: 4.0)),
               Container(
-                decoration: const BoxDecoration(color: Color(0xFF2c8cff)),
+                decoration: BoxDecoration(color: isMerdianDesk ? const Color(0xFF006B64) : const Color(0xFF2c8cff)),
                 padding:
                     const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
                 child: SelectionArea(
