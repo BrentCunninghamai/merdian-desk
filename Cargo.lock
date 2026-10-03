@@ -2104,16 +2104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "default_net"
-version = "0.1.0"
-source = "git+https://github.com/rustdesk-org/default_net#78f8f70cd85151a3a2c4a3230d80d5272703c02e"
-dependencies = [
- "anyhow",
- "regex",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3695,7 +3685,6 @@ dependencies = [
  "chrono",
  "clap 4.5.53",
  "confy",
- "default_net",
  "directories-next",
  "dirs-next",
  "dlopen",
@@ -3887,19 +3876,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
-name = "hwcodec"
-version = "0.7.1"
-source = "git+https://github.com/rustdesk-org/hwcodec#778df1f99597722473b29443bac22ae6c23946fe"
-dependencies = [
- "bindgen 0.59.2",
- "cc",
- "log",
- "serde 1.0.228",
- "serde_derive",
- "serde_json 1.0.118",
-]
-
-[[package]]
 name = "hyper"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4040,14 +4016,6 @@ dependencies = [
  "num-traits 0.2.19",
  "png 0.17.13",
  "tiff",
-]
-
-[[package]]
-name = "impersonate_system"
-version = "0.1.0"
-source = "git+https://github.com/rustdesk-org/impersonate-system#2f429010a5a10b1fe5eceb553c6672fd53d20167"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -7128,7 +7096,6 @@ dependencies = [
  "hex",
  "hound",
  "image 0.24.9",
- "impersonate_system",
  "include_dir",
  "jni",
  "kcp-sys",
@@ -7428,7 +7395,6 @@ dependencies = [
  "gstreamer-app",
  "gstreamer-video",
  "hbb_common",
- "hwcodec",
  "jni",
  "lazy_static",
  "log",

@@ -2425,13 +2425,8 @@ pub fn elevate(arg: &str) -> ResultType<bool> {
     )
 }
 
-pub fn run_as_system(arg: &str) -> ResultType<()> {
-    if crate::merdian_policy::active() { bail!("System execution is disabled in the attended pilot"); }
-    let exe = std::env::current_exe()?.to_string_lossy().to_string();
-    if impersonate_system::run_as_system(&exe, arg).is_err() {
-        bail!(format!("Failed to run {} as system", exe));
-    }
-    Ok(())
+pub fn run_as_system(_arg: &str) -> ResultType<()> {
+    bail!("System execution is not supported in Merdian-Desk")
 }
 
 pub fn elevate_or_run_as_system(is_setup: bool, is_elevate: bool, is_run_as_system: bool) {
@@ -4792,6 +4787,12 @@ pub(super) fn get_pids_with_first_arg_by_wmic<S1: AsRef<str>, S2: AsRef<str>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_execution_is_unavailable_in_attended_build() {
+        let error = run_as_system("--server").unwrap_err();
+        assert_eq!(error.to_string(), "System execution is not supported in Merdian-Desk");
+    }
 
     // Test-only reusable Win32 HANDLE RAII helper.
     // If a future non-test path needs the same pattern, move it out of this test module.

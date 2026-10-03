@@ -122,6 +122,9 @@ jobs:
       - name: Test attended policy and onboarding
         run: |
           $ErrorActionPreference = 'Stop'
+          $graph = & cargo tree --locked --offline --target x86_64-pc-windows-msvc --features flutter --edges normal,build --prefix none
+          if ($LASTEXITCODE -ne 0) { throw 'Software dependency graph failed.' }
+          if ($graph -match '^(default_net|hwcodec|impersonate_system) v') { throw 'An undeclared Git dependency remains in the software release graph.' }
           rustc --edition 2021 --test src/merdian_policy_model.rs -o "$env:RUNNER_TEMP\merdian-policy-tests.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Attended policy model compilation failed.' }
           & "$env:RUNNER_TEMP\merdian-policy-tests.exe"
@@ -134,17 +137,17 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Attended onboarding analysis failed.' }
           } finally { Pop-Location }
 
-      - name: Compile Windows Flutter client with hardware codec features
+      - name: Compile Windows Flutter client with software codec features
         run: |
           $ErrorActionPreference = 'Stop'
-          python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+          python build.py --portable --flutter --skip-portable-pack
           if ($LASTEXITCODE -ne 0) { throw 'Complete Windows build failed.' }
           $output = 'flutter/build/windows/x64/runner/Release'
           foreach ($file in @('rustdesk.exe','librustdesk.dll','flutter_windows.dll')) {
             if (-not (Test-Path "$output/$file") -or (Get-Item "$output/$file").Length -lt 10000) { throw "Build output is missing: $file" }
           }
           $hashes = Get-ChildItem -LiteralPath $output -File -Recurse | ForEach-Object { [ordered]@{path=$_.FullName.Substring((Resolve-Path $output).Path.Length+1); size=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()} }
-          [ordered]@{source_commit=$env:GITHUB_SHA; built_at_utc=[DateTime]::UtcNow.ToString('o'); features=@('flutter','hwcodec','vram'); compiled=$true; packaged=$false; executed=$false; signed=$false; installed=$false; published=$false; attended_session_verified=$false; files=@($hashes)} | ConvertTo-Json -Depth 6 | Set-Content "$output/merdian-build-evidence.json" -Encoding utf8NoBOM
+          [ordered]@{source_commit=$env:GITHUB_SHA; built_at_utc=[DateTime]::UtcNow.ToString('o'); features=@('flutter'); compiled=$true; packaged=$false; executed=$false; signed=$false; installed=$false; published=$false; attended_session_verified=$false; files=@($hashes)} | ConvertTo-Json -Depth 6 | Set-Content "$output/merdian-build-evidence.json" -Encoding utf8NoBOM
 
       - name: Retain unqualified review build bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

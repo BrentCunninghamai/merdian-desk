@@ -1,3 +1,1 @@
-[submodule "libs/hbb_common"]
-	path = libs/hbb_common
-	url = https://github.com/rustdesk/hbb_common
+# hbb_common is vendored at libs/hbb_common; see its MERDIAN-PROVENANCE.md.
